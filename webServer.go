@@ -1,47 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
-
-func middlewareCors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func customHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(200)
-	w.Write([]byte(http.StatusText(http.StatusOK)))
-}
-
-func (cfg *apiConfig) customMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(200)
-	hits := "Hits: " + fmt.Sprint(cfg.fileserverHits)
-	w.Write([]byte(hits))
-
-}
-
-type apiConfig struct {
-	fileserverHits int
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits++
-		next.ServeHTTP(w, r)
-	})
-}
 
 func main() {
 	serverRoot := "."
@@ -51,14 +14,26 @@ func main() {
 		fileserverHits: 0,
 	}
 
-	mux := http.NewServeMux()
+	router := chi.NewRouter()
+	routerAPI := chi.NewRouter()
 
-	//mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot))))
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
-	mux.HandleFunc("/healthz", customHandler)
-	mux.HandleFunc("/metrics", apiCfg.customMetricsHandler)
+	/*
+		mux := http.NewServeMux()
+		mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot))))
+		mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
+		mux.HandleFunc("/healthz", customHandler)
+		mux.HandleFunc("/metrics", apiCfg.customMetricsHandler)
+		corsMux := middlewareCors(mux)
+	*/
 
-	corsMux := middlewareCors(mux)
+	router.Handle("/app/*", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
+	router.Handle("/app", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
+	routerAPI.Get("/healthz", customHandler)
+	routerAPI.Get("/metrics", apiCfg.customMetricsHandler)
+
+	router.Mount("/api", routerAPI)
+
+	corsMux := middlewareCors(router)
 
 	server := http.Server{
 		Handler: corsMux,
