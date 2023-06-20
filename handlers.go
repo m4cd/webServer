@@ -135,6 +135,26 @@ func customGetChirpByIdHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, chirp)
 }
 
+func customPostCreateUser(w http.ResponseWriter, r *http.Request) {
+	db, _ := database.NewDB(databasePath)
+	decoder := json.NewDecoder(r.Body)
+	params := bodyUser{}
+	err := decoder.Decode(&params)
+
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
+	newUser, err := db.CreateUser(params.Email)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong while creating a user")
+		return
+	}
+
+	respondWithJSON(w, 201, newUser)
+}
+
 func respondWithError(w http.ResponseWriter, code int, errorMessage string) {
 	respondWithJSON(w, code, errorParameters{Error: errorMessage})
 }

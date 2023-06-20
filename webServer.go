@@ -41,6 +41,7 @@ func main() {
 	routerAPI.Get("/chirps", customGetChirpsHandler)
 	routerAPI.Get("/chirps", customGetChirpsHandler)
 	routerAPI.Get("/chirps/{chirpID}", customGetChirpByIdHandler)
+	routerAPI.Post("/users", customPostCreateUser)
 
 	router.Mount("/admin", routerAdmin)
 	router.Mount("/api", routerAPI)

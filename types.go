@@ -15,3 +15,7 @@ type bodyParameters struct {
 type cleanedBody struct {
 	CleanedBody string `json:"cleaned_body"`
 }
+
+type bodyUser struct {
+	Email string `json:"email"`
+}

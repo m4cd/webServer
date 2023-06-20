@@ -20,6 +20,12 @@ type Chirp struct {
 
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
+	Users  map[int]User  `json:"users"`
+}
+
+type User struct {
+	ID    int    `json:"id"`
+	Email string `json:"email"`
 }
 
 // NewDB creates a new database connection
@@ -32,7 +38,7 @@ func NewDB(path string) (*DB, error) {
 
 // CreateChirp creates a new chirp and saves it to disk
 func (db *DB) CreateChirp(body string) (Chirp, error) {
-
+	dbContents, _ := db.loadDB()
 	dbChirps, err := db.GetChirps()
 
 	if err != nil {
@@ -65,7 +71,7 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 		dbChirpsMap[c.ID] = ch
 	}
 
-	dbChirpsStruct := DBStructure{}
+	dbChirpsStruct := dbContents
 	dbChirpsStruct.Chirps = dbChirpsMap
 
 	db.writeDB(dbChirpsStruct)
@@ -132,4 +138,59 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 		return e
 	}
 	return err
+}
+
+// getUsers returns all userss in the database
+func (db *DB) getUsers() ([]User, error) {
+	dbUsers, err := db.loadDB()
+	if err == nil {
+		mapUsers := []User{}
+
+		for _, u := range dbUsers.Users {
+			mapUsers = append(mapUsers, u)
+		}
+
+		return mapUsers, nil
+	}
+	return []User{}, err
+}
+
+func (db *DB) CreateUser(email string) (User, error) {
+	dbContents, _ := db.loadDB()
+	dbUsers, err := db.getUsers()
+
+	if err != nil {
+		fmt.Println("Error while loading db")
+	}
+
+	// find max id
+	max := 0
+	for _, u := range dbContents.Users {
+		if u.ID > max {
+			max = u.ID
+		}
+	}
+
+	newID := max + 1
+	user := User{
+		ID:    newID,
+		Email: email,
+	}
+
+	dbUsers = append(dbUsers, user)
+	dbUsersMap := make(map[int]User)
+
+	for _, u := range dbUsers {
+		us := User{
+			ID:    u.ID,
+			Email: u.Email,
+		}
+		dbUsersMap[u.ID] = us
+	}
+	dbUsersStruct := dbContents
+	dbUsersStruct.Users = dbUsersMap
+
+	db.writeDB(dbUsersStruct)
+
+	return user, nil
 }
