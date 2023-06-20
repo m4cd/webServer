@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/m4cd/webServer/internal/database"
 )
 
@@ -105,6 +107,32 @@ func customGetChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	respondWithJSON(w, 200, dbChirps)
 
+}
+
+func customGetChirpByIdHandler(w http.ResponseWriter, r *http.Request) {
+	db, _ := database.NewDB(databasePath)
+
+	dbChirps, err := db.GetChirps()
+
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong while getting a chirp by ID")
+		return
+	}
+	chirpIDstr := chi.URLParam(r, "chirpID")
+	chirpIDint, err := strconv.Atoi(chirpIDstr)
+
+	if err != nil {
+		fmt.Println("Error while converting chirp ID from string to int")
+	}
+
+	if len(dbChirps) < chirpIDint {
+		w.WriteHeader(404)
+		return
+	}
+
+	chirp := dbChirps[chirpIDint-1]
+	fmt.Println(chirp)
+	respondWithJSON(w, 200, chirp)
 }
 
 func respondWithError(w http.ResponseWriter, code int, errorMessage string) {

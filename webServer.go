@@ -39,6 +39,8 @@ func main() {
 	//routerAPI.Post("/validate_chirp", customValidateChirpHandler)
 	routerAPI.Post("/chirps", customPostChirpsHandler)
 	routerAPI.Get("/chirps", customGetChirpsHandler)
+	routerAPI.Get("/chirps", customGetChirpsHandler)
+	routerAPI.Get("/chirps/{chirpID}", customGetChirpByIdHandler)
 
 	router.Mount("/admin", routerAdmin)
 	router.Mount("/api", routerAPI)
