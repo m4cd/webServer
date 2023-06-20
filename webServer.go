@@ -15,6 +15,7 @@ func main() {
 	}
 
 	router := chi.NewRouter()
+	routerAdmin := chi.NewRouter()
 	routerAPI := chi.NewRouter()
 
 	/*
@@ -26,11 +27,20 @@ func main() {
 		corsMux := middlewareCors(mux)
 	*/
 
-	router.Handle("/app/*", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
-	router.Handle("/app", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot)))))
-	routerAPI.Get("/healthz", customHandler)
-	routerAPI.Get("/metrics", apiCfg.customMetricsHandler)
+	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(serverRoot))))
+	router.Handle("/app/*", fsHandler)
+	router.Handle("/app", fsHandler)
 
+	//router.Handle("/*", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir(serverRoot))))
+	//router.Handle("/", apiCfg.middlewareMetricsInc(http.FileServer(http.Dir(serverRoot))))
+
+	routerAPI.Get("/healthz", customHealthzHandler)
+	routerAdmin.Get("/metrics", apiCfg.customMetricsHandler)
+	//routerAPI.Post("/validate_chirp", customValidateChirpHandler)
+	routerAPI.Post("/chirps", customPostChirpsHandler)
+	routerAPI.Get("/chirps", customGetChirpsHandler)
+
+	router.Mount("/admin", routerAdmin)
 	router.Mount("/api", routerAPI)
 
 	corsMux := middlewareCors(router)
