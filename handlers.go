@@ -76,25 +76,66 @@ func ValidateChirpHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, cleanedBody{CleanedBody: cleanBody})
 }
 
-func PostChirpsHandler(w http.ResponseWriter, r *http.Request) {
+func PostChirpsHandler(apicfg *apiConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-	db, _ := webapi.NewDB(databasePath)
-	decoder := json.NewDecoder(r.Body)
-	params := chirpBodyParameters{}
-	err := decoder.Decode(&params)
+		db, _ := webapi.NewDB(databasePath)
+		decoder := json.NewDecoder(r.Body)
+		params := chirpBodyParameters{}
+		err := decoder.Decode(&params)
 
-	if err != nil {
-		respondWithError(w, 500, "Something went wrong")
-		return
+		if err != nil {
+			respondWithError(w, 500, "Something went wrong")
+			return
+		}
+
+		//Authentication
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			fmt.Println("No \"Authorization\" header present")
+			respondWithCode(w, 401)
+			return
+		}
+		requestTokenString := strings.TrimPrefix(header, "Bearer ")
+
+		token, err := jwt.ParseWithClaims(requestTokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) { return []byte(apicfg.jwtSecret), nil })
+
+		if err != nil {
+			fmt.Println("Invalid token:", err)
+			respondWithCode(w, 401)
+			return
+		}
+
+		issuer, err := token.Claims.GetIssuer()
+		if err != nil {
+			fmt.Println("Error extracting issuer:", err)
+			respondWithCode(w, 401)
+			return
+		}
+		if apicfg.accessTokenIssuer != issuer {
+			fmt.Println("No access token in the header. Request rejected.")
+			respondWithCode(w, 401)
+			return
+		}
+
+		authorIDstr, err := token.Claims.GetSubject()
+		//fmt.Println(authorIDstr)
+		if err != nil {
+			fmt.Println("Error while extracting author ID")
+			respondWithCode(w, 401)
+			return
+		}
+		authorID, _ := strconv.Atoi(authorIDstr)
+		//fmt.Println(authorID)
+		newChirp, err := db.CreateChirp(params.BodyJSON, authorID)
+
+		if err != nil {
+			respondWithError(w, 500, "Something went wrong while creating chirp")
+			return
+		}
+		//fmt.Println(newChirp)
+		respondWithJSON(w, 201, newChirp)
 	}
-
-	newChirp, err := db.CreateChirp(params.BodyJSON)
-	if err != nil {
-		respondWithError(w, 500, "Something went wrong while creating chirp")
-		return
-	}
-
-	respondWithJSON(w, 201, newChirp)
 }
 
 func GetChirpsHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +148,7 @@ func GetChirpsHandler(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, "Something went wrong while getting chirps")
 		return
 	}
+
 	respondWithJSON(w, 200, dbChirps)
 
 }
@@ -133,8 +175,63 @@ func GetChirpByIdHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chirp := dbChirps[chirpIDint-1]
-	fmt.Println(chirp)
 	respondWithJSON(w, 200, chirp)
+}
+
+func DeleteChirpByIdHandler(apicfg *apiConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestTokenString := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
+		token, err := jwt.ParseWithClaims(requestTokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) { return []byte(apicfg.jwtSecret), nil })
+
+		if err != nil {
+			fmt.Println("Invalid token:", err)
+			respondWithCode(w, 403)
+			return
+		}
+
+		issuer, err := token.Claims.GetIssuer()
+		if err != nil {
+			fmt.Println("Error extracting issuer:", err)
+			respondWithCode(w, 403)
+			return
+		}
+		if apicfg.refreshTokenIssuer == issuer {
+			fmt.Println("Refresh token in the header. Request rejected.")
+			respondWithCode(w, 403)
+			return
+		}
+		expirationTime, _ := token.Claims.GetExpirationTime()
+
+		if expirationTime.Compare(time.Now()) != 1 {
+			fmt.Println("Expired token:", err)
+			respondWithCode(w, 403)
+			return
+		}
+
+		idString, _ := token.Claims.GetSubject()
+		id, _ := strconv.Atoi(idString)
+
+		db, _ := webapi.NewDB(databasePath)
+
+		dbChirps, _ := db.GetChirps()
+		chirpIDstr := chi.URLParam(r, "chirpID")
+		chirpIDint, _ := strconv.Atoi(chirpIDstr)
+
+		for _, chirp := range dbChirps {
+			if chirp.AuthorID == id && chirp.ID == chirpIDint {
+				if db.DeleteChirp(chirpIDint) == nil {
+					respondWithJSON(w, 200, chirp)
+					return
+				} else {
+					break
+				}
+
+			}
+		}
+
+		respondWithCode(w, 403)
+	}
 }
 
 func PostCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -218,32 +315,38 @@ func PutUpdateUser(apicfg *apiConfig) http.HandlerFunc {
 		params := PostUser{}
 		err := decoder.Decode(&params)
 
-		fmt.Printf("Body: %v\n", params)
-
 		if err != nil {
 			respondWithError(w, 500, "Something went wrong")
 			return
 		}
 
 		requestTokenString := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		//fmt.Printf("requestTokenString: %v\n", requestTokenString)
 
 		token, err := jwt.ParseWithClaims(requestTokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) { return []byte(apicfg.jwtSecret), nil })
 
 		if err != nil {
 			fmt.Println("Invalid token:", err)
-			//respondWithError(w, 401, "Unauthorized")
 			respondWithCode(w, 401)
 			return
 		}
 
+		issuer, err := token.Claims.GetIssuer()
+		if err != nil {
+			fmt.Println("Error extracting issuer:", err)
+			respondWithCode(w, 401)
+			return
+		}
+		if apicfg.refreshTokenIssuer == issuer {
+			fmt.Println("Refresh token in the header. Request rejected.")
+			respondWithCode(w, 401)
+			return
+		}
 		expirationTime, _ := token.Claims.GetExpirationTime()
 		idString, _ := token.Claims.GetSubject()
 		id, _ := strconv.Atoi(idString)
 
 		if expirationTime.Compare(time.Now()) != 1 {
 			fmt.Println("Expired token:", err)
-			//respondWithError(w, 401, "Unauthorized")
 			respondWithCode(w, 401)
 			return
 		}
@@ -251,11 +354,98 @@ func PutUpdateUser(apicfg *apiConfig) http.HandlerFunc {
 		UserModified, err := db.UpdateUser(id, params.Email, params.Password)
 		if err != nil {
 			fmt.Println("Error while user update:", err)
-			//respondWithError(w, 401, "Unauthorized")
 			respondWithCode(w, 401)
 			return
 		}
 		respondWithJSON(w, 200, UserModified)
+	}
+}
+
+func PostRefreshToken(apicfg *apiConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			fmt.Println("No \"Authorization\" header present")
+			respondWithCode(w, 401)
+			return
+		}
+		requestTokenString := strings.TrimPrefix(header, "Bearer ")
+
+		token, err := jwt.ParseWithClaims(requestTokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) { return []byte(apicfg.jwtSecret), nil })
+
+		if err != nil {
+			fmt.Println("Invalid token:", err)
+			respondWithCode(w, 401)
+			return
+		}
+
+		issuer, err := token.Claims.GetIssuer()
+		if err != nil {
+			fmt.Println("Error extracting issuer:", err)
+			respondWithCode(w, 401)
+			return
+		}
+		if apicfg.refreshTokenIssuer != issuer {
+			fmt.Println("No refresh token in the header. Request rejected.")
+			respondWithCode(w, 401)
+			return
+		}
+
+		db, _ := webapi.NewDB(databasePath)
+		revokedTokenFound := db.CheckToken(requestTokenString)
+		if revokedTokenFound == true {
+			fmt.Println("Token revoked.")
+			respondWithCode(w, 401)
+			return
+		}
+
+		currentTime := time.Now()
+		subject, _ := token.Claims.GetSubject()
+		accessToken := generateToken(
+			jwt.NewNumericDate(currentTime),
+			apicfg.accessTokenIssuer,
+			jwt.NewNumericDate(currentTime.Add(time.Duration(apicfg.accessTokenExpiration)*time.Second)),
+			subject,
+			apicfg)
+
+		respondWithJSON(w, 200, Token{Token: accessToken})
+	}
+}
+
+func PostRevokeToken(apicfg *apiConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			fmt.Println("No \"Authorization\" header present")
+			respondWithCode(w, 401)
+			return
+		}
+		requestTokenString := strings.TrimPrefix(header, "Bearer ")
+
+		token, err := jwt.ParseWithClaims(requestTokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) { return []byte(apicfg.jwtSecret), nil })
+
+		if err != nil {
+			fmt.Println("Invalid token:", err)
+			respondWithCode(w, 401)
+			return
+		}
+
+		issuer, err := token.Claims.GetIssuer()
+		if err != nil {
+			fmt.Println("Error extracting issuer:", err)
+			respondWithCode(w, 401)
+			return
+		}
+		if apicfg.refreshTokenIssuer != issuer {
+			fmt.Println("No refresh token in the header. Request rejected.")
+			respondWithCode(w, 401)
+			return
+		}
+		db, _ := webapi.NewDB(databasePath)
+		db.RevokeToken(requestTokenString, *jwt.NewNumericDate(time.Now()))
+		//respondWithCode(w, 200)
+		respondWithJSON(w, 200, Token{Token: requestTokenString})
 	}
 }
 

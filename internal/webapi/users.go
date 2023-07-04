@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// getUsers returns all userss in the database
+// getUsers returns all users in the database
 func (db *DB) getUsers() ([]User, error) {
 	dbUsers, err := db.loadDB()
 	if err == nil {
@@ -128,14 +129,10 @@ func (db *DB) UpdateUser(id int, email string, password string) (ResponseUser, e
 	dbUsers, _ := db.getUsers()
 
 	UserFound, err := db.findUserById(id)
-	/*if UserFound.Email != email {
-		return ResponseUser{}, errors.New("Mail and ID do not match.")
-	}*/
 
 	if err != nil {
 		return ResponseUser{}, errors.New("User not found")
 	}
-	//fmt.Printf("User found: %v", UserFound)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 0)
 	if err != nil {
@@ -146,8 +143,6 @@ func (db *DB) UpdateUser(id int, email string, password string) (ResponseUser, e
 		Email:    email,
 		Password: string(hash),
 	}
-
-	fmt.Println(UserFound)
 
 	dbUsers = append(dbUsers, UserFound)
 	dbUsersMap := make(map[int]User)
@@ -166,6 +161,33 @@ func (db *DB) UpdateUser(id int, email string, password string) (ResponseUser, e
 	db.writeDB(dbUsersStruct)
 
 	return ResponseUser{ID: UserFound.ID, Email: UserFound.Email}, nil
+}
 
-	//return ResponseUser{}, nil
+func (db *DB) RevokeToken(tokenString string, RevokeTime jwt.NumericDate) (RevokedToken, error) {
+	dbContents, _ := db.loadDB()
+
+	RevokedTokens := make(map[string]jwt.NumericDate)
+
+	for token, time := range dbContents.RevokedTokens {
+		RevokedTokens[token] = time
+	}
+
+	RevokedTokens[tokenString] = RevokeTime
+	dbContents.RevokedTokens = RevokedTokens
+
+	db.writeDB(dbContents)
+
+	return RevokedToken{TokenString: tokenString, RevokeTime: RevokeTime}, nil
+}
+
+func (db *DB) CheckToken(tokenString string) bool {
+	dbContents, _ := db.loadDB()
+
+	_, ok := dbContents.RevokedTokens[tokenString]
+	if ok {
+		return true
+
+	}
+	return false
+
 }

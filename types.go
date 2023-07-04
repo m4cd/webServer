@@ -26,3 +26,7 @@ type PostUser struct {
 	Email      string `json:"email"`
 	Expiration int    `json:"expires_in_seconds,omitempty"`
 }
+
+type Token struct {
+	Token string `json:"token"`
+}
