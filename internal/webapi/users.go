@@ -117,7 +117,7 @@ func (db *DB) VerifyCredentials(email string, password string) (ResponseUser, er
 	PasswordIsCorrect := bcrypt.CompareHashAndPassword([]byte(UserFound.Password), []byte(password))
 
 	if PasswordIsCorrect == nil {
-		return ResponseUser{ID: UserFound.ID, Email: UserFound.Email}, nil
+		return ResponseUser{ID: UserFound.ID, Email: UserFound.Email, ChirpyRed: UserFound.ChirpyRed}, nil
 	}
 
 	return ResponseUser{}, errors.New("Incorrect password.")
@@ -190,4 +190,21 @@ func (db *DB) CheckToken(tokenString string) bool {
 	}
 	return false
 
+}
+
+func (db *DB) ChirpyRedUpdateUser(userID int) error {
+	dbContents, _ := db.loadDB()
+
+	dbUser, err := db.findUserById(userID)
+
+	if err != nil {
+		return errors.New("User not found")
+	}
+
+	dbUser.ChirpyRed = true
+
+	dbContents.Users[userID] = dbUser
+
+	db.writeDB(dbContents)
+	return nil
 }

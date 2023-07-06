@@ -26,9 +26,10 @@ type DBStructure struct {
 }
 
 type User struct {
-	ID       int    `json:"id"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	ID        int    `json:"id"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	ChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 type ResponseUser struct {
@@ -36,9 +37,13 @@ type ResponseUser struct {
 	Email        string `json:"email"`
 	Token        string `json:"token,omitempty"`
 	RefreshToken string `json:"refresh_token,omitempty"`
+	ChirpyRed    bool   `json:"is_chirpy_red"`
 }
 
 type RevokedToken struct {
 	TokenString string          `json:"token"`
 	RevokeTime  jwt.NumericDate `json:"revoke_time,omitempty"`
+}
+
+type EmptyStruct struct {
 }

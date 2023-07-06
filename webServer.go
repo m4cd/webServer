@@ -13,7 +13,7 @@ func main() {
 	dbg := flag.Bool("debug", false, "Enable debug mode")
 	flag.Parse()
 
-	godotenv.Load()
+	godotenv.Load(".env")
 
 	if *dbg {
 		os.Remove(databasePath)
@@ -29,6 +29,7 @@ func main() {
 		accessTokenIssuer:      "chirpy-access",
 		refreshTokenExpiration: 60 * 24 * 3600, //60 days
 		refreshTokenIssuer:     "chirpy-refresh",
+		polkaApiKey:            os.Getenv("POLKA_API_KEY"),
 	}
 
 	router := chi.NewRouter()
@@ -64,6 +65,9 @@ func main() {
 	routerAPI.Put("/users", PutUpdateUser(&apiCfg))
 	routerAPI.Post("/refresh", PostRefreshToken(&apiCfg))
 	routerAPI.Post("/revoke", PostRevokeToken(&apiCfg))
+
+	//Chirpy Red Webhook
+	routerAPI.Post("/polka/webhooks", PolkaChirpyRedWebhook(&apiCfg))
 
 	router.Mount("/admin", routerAdmin)
 	router.Mount("/api", routerAPI)
